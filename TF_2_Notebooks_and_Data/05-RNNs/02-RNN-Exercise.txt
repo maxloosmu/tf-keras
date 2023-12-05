@@ -1,0 +1,65 @@
+import pandas as pd
+import numpy as np
+%matplotlib inline
+import matplotlib.pyplot as plt
+df = pd.read_csv('../DATA/Frozen_Dessert_Production.csv')
+df.head()
+
+df = pd.read_csv('../DATA/Frozen_Dessert_Production.csv',index_col='DATE',parse_dates=True)
+df.columns = ['Production']
+print(len(df))
+df.head()
+df.plot()
+test_size = 24
+test_ind = len(df)- test_size
+train = df.iloc[:test_ind]
+test = df.iloc[test_ind:]
+
+from sklearn.preprocessing import MinMaxScaler
+scaler = MinMaxScaler()
+scaler.fit(train)
+scaled_train = scaler.transform(train)
+scaled_test = scaler.transform(test)
+from tensorflow.keras.preprocessing.sequence import TimeseriesGenerator
+length = 18
+generator = TimeseriesGenerator(scaled_train, scaled_train, length=length, batch_size=1)
+X,y = generator[0]
+print(f'Given the Array: \n{X.flatten()}')
+print(f'Predict this y: \n {y}')
+
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, LSTM
+n_features = 1
+model = Sequential()
+model.add(LSTM(100, activation='relu', input_shape=(length, n_features)))
+model.add(Dense(1))
+model.compile(optimizer='adam', loss='mse')
+model.summary()
+
+from tensorflow.keras.callbacks import EarlyStopping
+early_stop = EarlyStopping(monitor='val_loss',patience=2)
+validation_generator = TimeseriesGenerator(scaled_test,scaled_test, length=length, batch_size=1)
+model.fit(generator,epochs=20,
+          validation_data=validation_generator,
+          callbacks=[early_stop])
+losses = pd.DataFrame(model.history.history)
+losses.plot()
+
+test_predictions = []
+first_eval_batch = scaled_train[-length:]
+current_batch = first_eval_batch.reshape((1, length, n_features))
+for i in range(len(test)):
+    # get prediction 1 time stamp ahead ([0] is for grabbing just the number instead of [array])
+    current_pred = model.predict(current_batch)[0]
+    # store prediction
+    test_predictions.append(current_pred) 
+    # update batch to now include prediction and drop first value
+    current_batch = np.append(current_batch[:,1:,:],[[current_pred]],axis=1)
+true_predictions = scaler.inverse_transform(test_predictions)
+test['Predictions'] = true_predictions
+print(test.head())
+test.plot(figsize=(12,8))
+
+
+
+
