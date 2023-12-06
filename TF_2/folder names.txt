@@ -1,0 +1,5 @@
+00-NumPy-Crash-Course
+01-Pandas-Crash-Course
+02-Visualization-Crash-Course
+
+
